@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
+    "@vercel/analytics": "^1.5.0",
     "autoprefixer": "^10.4.16",
     "chart.js": "^4.4.9",
     "framer-motion": "^10.16.4",
