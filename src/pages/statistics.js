@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Head from 'next/head';
 import Link from 'next/link';
-import { Bar, Line } from 'react-chartjs-2';
+import { Bar, Line, Pie } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
+  ArcElement,
   CategoryScale,
   LinearScale,
   PointElement,
@@ -17,6 +18,7 @@ import {
 import AdSense from '../components/AdSense';
 
 ChartJS.register(
+  ArcElement,
   CategoryScale,
   LinearScale,
   PointElement,
@@ -41,6 +43,10 @@ const EMOTION_ILLUSTRATIONS = {
   Tired: '😴',
 };
 
+// 긍정/부정 감정 분류
+const POSITIVE_EMOTIONS = ['Happy', 'Calm', 'Love', 'Grateful'];
+const NEGATIVE_EMOTIONS = ['Sad', 'Angry', 'Anxious', 'Lonely', 'Frustrated', 'Tired'];
+
 function getJournalHistory() {
   if (typeof window === 'undefined') return [];
   try {
@@ -56,6 +62,7 @@ export default function Statistics() {
   const [emotionFrequency, setEmotionFrequency] = useState({});
   const [weeklyTrend, setWeeklyTrend] = useState({});
   const [monthlyTrend, setMonthlyTrend] = useState({});
+  const [dayTrend, setDayTrend] = useState({});
 
   useEffect(() => {
     const history = getJournalHistory();
@@ -68,25 +75,41 @@ export default function Statistics() {
     });
     setEmotionFrequency(frequency);
 
-    // 주간/월간 트렌드 계산
+    // 일/주/월 트렌드 계산
+    const daily = {};
     const weekly = {};
     const monthly = {};
-    
     history.forEach(entry => {
       const date = new Date(entry.date);
+      const dayKey = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
       const weekKey = `${date.getFullYear()}-W${Math.ceil((date.getDate() + date.getDay()) / 7)}`;
       const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
-      
+      if (!daily[dayKey]) daily[dayKey] = {};
       if (!weekly[weekKey]) weekly[weekKey] = {};
       if (!monthly[monthKey]) monthly[monthKey] = {};
-      
+      daily[dayKey][entry.emotion] = (daily[dayKey][entry.emotion] || 0) + 1;
       weekly[weekKey][entry.emotion] = (weekly[weekKey][entry.emotion] || 0) + 1;
       monthly[monthKey][entry.emotion] = (monthly[monthKey][entry.emotion] || 0) + 1;
     });
-
+    setDayTrend(daily);
     setWeeklyTrend(weekly);
     setMonthlyTrend(monthly);
   }, []);
+
+  // 긍정/부정 감정 비율 계산
+  const positiveCount = Object.entries(emotionFrequency).filter(([e]) => POSITIVE_EMOTIONS.includes(e)).reduce((sum, [, v]) => sum + v, 0);
+  const negativeCount = Object.entries(emotionFrequency).filter(([e]) => NEGATIVE_EMOTIONS.includes(e)).reduce((sum, [, v]) => sum + v, 0);
+  const pieData = {
+    labels: ['Positive', 'Negative'],
+    datasets: [
+      {
+        data: [positiveCount, negativeCount],
+        backgroundColor: ['#38bdf8', '#f87171'],
+        borderColor: ['#0ea5e9', '#ef4444'],
+        borderWidth: 2,
+      },
+    ],
+  };
 
   const getEmotionColor = (emotion) => {
     const colors = {
@@ -122,11 +145,11 @@ export default function Statistics() {
   };
 
   const trendData = {
-    labels: Object.keys(timeRange === 'week' ? weeklyTrend : monthlyTrend),
+    labels: Object.keys(timeRange === 'day' ? dayTrend : timeRange === 'week' ? weeklyTrend : monthlyTrend),
     datasets: Object.keys(emotionFrequency).map(emotion => ({
       label: emotion,
-      data: Object.keys(timeRange === 'week' ? weeklyTrend : monthlyTrend).map(
-        key => (timeRange === 'week' ? weeklyTrend[key][emotion] : monthlyTrend[key][emotion]) || 0
+      data: Object.keys(timeRange === 'day' ? dayTrend : timeRange === 'week' ? weeklyTrend : monthlyTrend).map(
+        key => (timeRange === 'day' ? dayTrend[key][emotion] : timeRange === 'week' ? weeklyTrend[key][emotion] : monthlyTrend[key][emotion]) || 0
       ),
       borderColor: getEmotionBorderColor(emotion),
       backgroundColor: getEmotionColor(emotion),
@@ -154,33 +177,16 @@ export default function Statistics() {
             ← Back to Home
           </Link>
           <div className="flex space-x-4">
-            <button
-              onClick={() => setTimeRange('week')}
-              className={`px-4 py-2 rounded-xl ${
-                timeRange === 'week'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-white text-indigo-600 dark:bg-gray-800 dark:text-indigo-400'
-              }`}
-            >
-              Week
-            </button>
-            <button
-              onClick={() => setTimeRange('month')}
-              className={`px-4 py-2 rounded-xl ${
-                timeRange === 'month'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-white text-indigo-600 dark:bg-gray-800 dark:text-indigo-400'
-              }`}
-            >
-              Month
-            </button>
+            <button onClick={() => setTimeRange('day')} className={`px-3 sm:px-4 py-2 rounded-xl ${timeRange === 'day' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 dark:bg-gray-800 dark:text-indigo-400'}`}>Day</button>
+            <button onClick={() => setTimeRange('week')} className={`px-3 sm:px-4 py-2 rounded-xl ${timeRange === 'week' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 dark:bg-gray-800 dark:text-indigo-400'}`}>Week</button>
+            <button onClick={() => setTimeRange('month')} className={`px-3 sm:px-4 py-2 rounded-xl ${timeRange === 'month' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 dark:bg-gray-800 dark:text-indigo-400'}`}>Month</button>
           </div>
         </div>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-indigo-100 dark:border-indigo-900 mb-8"
+          className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl p-4 sm:p-8 border border-indigo-100 dark:border-indigo-900 mb-6 sm:mb-8"
         >
           <h2 className="text-2xl font-bold text-indigo-900 dark:text-indigo-100 mb-6">Your Top Emotions</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -203,10 +209,10 @@ export default function Statistics() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-indigo-100 dark:border-indigo-900 mb-8"
+          className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl p-4 sm:p-8 border border-indigo-100 dark:border-indigo-900 mb-6 sm:mb-8"
         >
           <h2 className="text-2xl font-bold text-indigo-900 dark:text-indigo-100 mb-6">Emotion Frequency</h2>
-          <div className="h-80">
+          <div className="h-56 sm:h-80 w-full overflow-x-auto">
             <Bar
               data={frequencyData}
               options={{
@@ -243,12 +249,12 @@ export default function Statistics() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-indigo-100 dark:border-indigo-900"
+          className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl p-4 sm:p-8 border border-indigo-100 dark:border-indigo-900"
         >
           <h2 className="text-2xl font-bold text-indigo-900 dark:text-indigo-100 mb-6">
-            {timeRange === 'week' ? 'Weekly' : 'Monthly'} Emotion Trends
+            {timeRange === 'week' ? 'Weekly' : timeRange === 'month' ? 'Monthly' : 'Daily'} Emotion Trends
           </h2>
-          <div className="h-80">
+          <div className="h-56 sm:h-80 w-full overflow-x-auto">
             <Line
               data={trendData}
               options={{
@@ -279,6 +285,18 @@ export default function Statistics() {
             />
           </div>
         </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl p-4 sm:p-8 border border-indigo-100 dark:border-indigo-900 mt-10 mb-6 sm:mb-8"
+        >
+          <h2 className="text-2xl font-bold text-indigo-900 dark:text-indigo-100 mb-6">Positive/Negative Emotion Ratio</h2>
+          <div className="h-64 flex items-center justify-center">
+            <Pie data={pieData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }} />
+          </div>
+        </motion.div>
+
         <div className="mt-12">
           <AdSense />
         </div>
